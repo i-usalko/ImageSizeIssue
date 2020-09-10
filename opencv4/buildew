@@ -1,0 +1,160 @@
+#!/bin/bash
+
+# CHECK PYTHON 3
+if command -v python3 &>/dev/null; then
+   echo Python3 available
+else
+   echo Python3 not available, please install it or add to the PATH variable
+   exit 1
+fi
+
+# CHECK PIP
+if command -v python3 -m pip &>/dev/null; then
+   echo Pip available
+else
+   echo Pip not available, please install it or add to the PATH variable
+   exit 1
+fi
+
+# CHECK VIRTUALENV COMMAND
+if command -v virtualenv &>/dev/null; then
+   echo Virtualenv command available
+else
+   echo Virtualenv not available, please install it [For example: python3 -m pip install virtualenv]
+   exit 1
+fi
+
+# CHECK VENV NOT EXISTS
+if [ ! -d .venv ]; then
+    while [[ "$#" -gt 0 ]]; do
+        case $1 in
+            --python-version) PYTHON_VERSION="$2"; shift ;;
+            *) PYTHON_VERSION=3; exit 1 ;;
+        esac
+        shift
+    done
+
+    virtualenv -p /usr/bin/python${PYTHON_VERSION} .venv
+fi
+
+tmpfile=$(mktemp /tmp/venv.XXXXXX)
+cat requirements.txt | grep -v 'picamera' > $tmpfile
+.venv/bin/pip install -r $tmpfile
+echo $tmpfile
+rm -fr $tmpfile
+
+if [ ! -f sensor.ini  ]; then
+    cp sensor.ini.example sensor.ini
+fi
+
+function clean_build {
+    echo 'Clear previous build'
+    rm -fr dist
+    rm -fr build
+    rm -fr sensor_agent_farmsee.egg-info
+}
+
+if [ "x$1" == "xclear" ] || [ "x$1" == "xclean" ]; then
+    clean_build
+fi
+
+function pip_build {
+    clean_build
+    echo 'Build package for deploy'
+    .venv/bin/python setup.py bdist_wheel
+    echo 'Copy additional artifacts: sensor.ini'
+    cp sensor.ini.example dist/sensor.ini
+    # echo 'Copy additional artifacts: deploy.sh'
+    # cp deploy.sh  dist/deploy.sh
+    echo 'Copy additional artifacts: launcher.py'
+    cp launcher.py  dist/launcher.py
+    echo 'Copy additional artifacts: launcher_state_manager.py'
+    cp launcher_state_manager.py dist/launcher_state_manager.py
+    echo 'Copy additional artifacts: launcher_sys_service_adapter.py'
+    cp launcher_sys_service_adapter.py dist/launcher_sys_service_adapter.py
+
+    echo 'Copy additional artifacts: setup_camera.py'
+    cp tests/setup_camera.py  dist/setup_camera.py
+    echo 'Copy additional artifacts: setup_camera'
+    cp tests/setup_camera  dist/setup_camera
+}
+
+if [ "x$1" == "xpip" ]; then
+    pip_build
+fi
+
+function deb_build {
+    pip_build
+
+    echo 'Check debian tools'
+    if command -v dh_make &>/dev/null; then
+      echo Debian package build tools are available
+    else
+      echo """
+         Debian package build tools are not available.
+         Please install debian packet maker scripts:
+               sudo apt-get install dh-make devscripts
+        """
+      exit 1
+    fi
+
+    echo 'Build package for raspberry'
+    .venv/bin/python buildew_deb.py
+}
+
+function launcher_deb_build {
+    pip_build
+
+    echo 'Check debian tools'
+    if command -v dh_make &>/dev/null; then
+      echo Debian package build tools are available
+    else
+      echo """
+         Debian package build tools are not available.
+         Please install debian packet maker scripts:
+               sudo apt-get install dh-make devscripts
+        """
+      exit 1
+    fi
+
+    echo 'Build package for raspberry'
+    .venv/bin/python buildew_launcher_deb.py
+}
+
+if [ "x$1" == "xdeb" ] || [ "x$1" == "xbuild" ]; then
+    deb_build
+fi
+
+if [ "x$1" == "xlauncher-deb" ] || [ "x$1" == "xbuild" ]; then
+    launcher_deb_build
+fi
+
+if [ "x$1" == "xdeploy" ]; then
+    pip_build
+    echo 'Deploy to S3 and API'
+    .venv/bin/python buildew_deploy.py --s3-bucket-name=farmsee-sensor-versions --api-version-url=https://dev-api.farmsee.com/api-1.0/sensor/UploadSensorAgentVersion --without-git-commit
+fi
+
+if [ "x$1" == "xclear" ]; then
+    echo 'Clear previous build'
+    rm -fr dist
+    rm -fr build
+    rm -fr sensor_agent_farmsee.egg-info
+fi
+
+if [ "x$1" == "xaitests" ]; then
+    deb_build
+
+    echo 'Run integration tests on device powered by ansible'
+    .venv/bin/pip install ansible
+    export ANSIBLE_PERSISTENT_CONNECT_TIMEOUT=300
+    export DEFAULT_GATHER_TIMEOUT=300
+    export DEFAULT_TIMEOUT=300
+    VERSION=`venv/bin/python -c 'from fsa.version.sensor_agent_version import SensorAgentVersion; print(SensorAgentVersion.standard())'`
+    ANSIBLE_CONFIG=.aitests/ansible.cfg .venv/bin/ansible-playbook -i .aitests/hosts -v -b -cssh .aitests/usb-raspberry-pi4.yml --extra-vars "version=$VERSION"
+fi
+
+AVAILABLE_COMMANDS="clear clean pip deb build deploy aitests launcher-deb"
+ARG_ONE=$1
+echo ''
+[[ $AVAILABLE_COMMANDS =~ (^| )$ARG_ONE($| ) ]] && echo 'Ok' || echo 'Unknown command: ' "$ARG_ONE"
