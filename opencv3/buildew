@@ -35,6 +35,8 @@ if [ ! -d .venv ]; then
     done
 
     virtualenv -p /usr/bin/python${PYTHON_VERSION} .venv
+    mkdir input
+    mkdir output
 fi
 
 tmpfile=$(mktemp /tmp/venv.XXXXXX)

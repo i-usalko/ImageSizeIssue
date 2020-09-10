@@ -22,7 +22,11 @@ REM 	%PYTHON3% -m pip install .venv
 REM ) ELSE echo "Venv module available" 
 
 REM CHECK VENV NOT EXISTS
-IF NOT EXIST "%CD%\.venv" ( %PYTHON3% -m venv .venv )
+IF NOT EXIST "%CD%\.venv" ( 
+    %PYTHON3% -m venv .venv 
+    MKDIR input
+    MKDIR output
+)
 
 set TMP_DEPENDENCIES_TXT=%TEMP%\dependencies-%DATE:/=-%-%TIME::=-%.txt
 set TMP_DEPENDENCIES_TXT=%TMP_DEPENDENCIES_TXT: =-%
