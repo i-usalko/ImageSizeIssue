@@ -4,7 +4,7 @@
 ```
 cd opencv3
 ./buildew
-python3 test.py
+./venv/bin/python3 test.py
 ```
 
 ### OpenCV4
@@ -12,7 +12,7 @@ python3 test.py
 ```
 cd opencv4
 ./buildew
-python3 test.py
+.venv/bin/python3 test.py
 ```
 
 1. Not compressed images available in December 2019

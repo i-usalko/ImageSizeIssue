@@ -17,7 +17,7 @@ set PIP3=pip
 REM CHECK VIRTUALENV COMMAND
 REM %PYTHON3% -m .venv >nul
 REM IF %ERRORLEVEL% NEQ 2 (
-REM 	echo "Virtualenv not available, installing it [python3 -m pip install .venv]"
+REM 	echo "Virtualenv not available, installing it [python3 -m pip install venv]"
 REM 	%PYTHON3% -m pip install .venv
 REM ) ELSE echo "Venv module available" 
 
